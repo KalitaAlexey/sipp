@@ -185,6 +185,7 @@ protected:
     int            nb_retrans;
     unsigned int   nb_last_delay;
 
+    int paused_while_var_not_set;
     unsigned int   paused_until;
 
     unsigned long  start_time;

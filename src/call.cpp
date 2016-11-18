@@ -111,6 +111,10 @@ unsigned int call::wake()
         wake = paused_until;
     }
 
+    if (paused_while_var_not_set != -1) {
+        wake = 500;
+    }
+
     if (next_retrans && (!wake || (next_retrans < wake))) {
         wake = next_retrans;
     }
@@ -350,6 +354,7 @@ void call::init(scenario * call_scenario, SIPpSocket *socket, struct sockaddr_st
     nb_retrans = 0;
     nb_last_delay = 0;
 
+    paused_while_var_not_set = -1;
     paused_until = 0;
 
     call_port = 0;
@@ -650,6 +655,10 @@ void call::dump()
     sprintf(s, "%s: State %d", id, msg_index);
     if (next_retrans) {
         snprintf(tmpbuf, 64, "%s (next retrans %u)", s, next_retrans);
+        strcat(s, tmpbuf);
+    }
+    if (paused_while_var_not_set != -1) {
+        snprintf(tmpbuf, 64, "%s (paused while variable not set %d)", s, paused_while_var_not_set);
         strcat(s, tmpbuf);
     }
     if (paused_until) {
@@ -1178,26 +1187,30 @@ bool call::next()
 
 bool call::executeMessage(message *curmsg)
 {
-    if (curmsg->pause_distribution || curmsg->pause_variable != -1) {
-        unsigned int pause;
-        if (curmsg->pause_distribution) {
-            double actualpause = curmsg->pause_distribution->sample();
-            if (actualpause < 1) {
-                // Protect against distribution samples that give
-                // negative results (and so pause for ~50 hours when
-                // cast to a unsigned int).
-                pause = 0;
+    if (curmsg->pause_distribution || curmsg->pause_variable != -1 || curmsg->pause_while_var_not_set != -1) {
+        if (curmsg->pause_distribution || curmsg->pause_variable != -1) {
+            unsigned int pause;
+            if (curmsg->pause_distribution) {
+                double actualpause = curmsg->pause_distribution->sample();
+                if (actualpause < 1) {
+                    // Protect against distribution samples that give
+                    // negative results (and so pause for ~50 hours when
+                    // cast to a unsigned int).
+                    pause = 0;
+                } else {
+                    pause  = (unsigned int)actualpause;
+                };
             } else {
-                pause  = (unsigned int)actualpause;
-            };
-        } else {
-            int varId = curmsg->pause_variable;
-            pause = (int) M_callVariableTable->getVar(varId)->getDouble();
+                int varId = curmsg->pause_variable;
+                pause = (int) M_callVariableTable->getVar(varId)->getDouble();
+            }
+            if (pause > INT_MAX) {
+                pause = INT_MAX;
+            }
+            paused_until = clock_tick + pause;
+        } else { // curmsg->pause_while_var_not_set != -1
+            paused_while_var_not_set = curmsg->pause_while_var_not_set;
         }
-        if (pause > INT_MAX) {
-            pause = INT_MAX;
-        }
-        paused_until = clock_tick + pause;
 
         /* This state is used as the last message of a scenario, just for handling
          * final retransmissions. If the connection closes, we do not mark it is
@@ -1208,7 +1221,9 @@ bool call::executeMessage(message *curmsg)
         curmsg->sessions++;
         do_bookkeeping(curmsg);
         executeAction(NULL, curmsg);
-        callDebug("Pausing call until %d (is now %ld).\n", paused_until, clock_tick);
+        if (curmsg->pause_distribution || curmsg->pause_variable != -1) {
+            callDebug("Pausing call until %d (is now %ld).\n", paused_until, clock_tick);
+        }
         setPaused();
         return true;
     } else if(curmsg -> M_type == MSG_TYPE_SENDCMD) {
@@ -1555,17 +1570,18 @@ bool call::run()
         }
     }
 
-    if(paused_until) {
-        /* Process a pending pause instruction until delay expiration */
-        if(paused_until > clock_tick) {
-            callDebug("Call is paused until %d (now %ld).\n", paused_until, clock_tick);
-            setPaused();
-            callDebug("Running: %d (wake %d).\n", running, wake());
-            return true;
-        }
-        /* Our pause is over. */
-        callDebug("Pause complete, waking up.\n");
-        paused_until = 0;
+    if (paused_until || paused_while_var_not_set != -1) {
+        if(paused_until) {
+            /* Process a pending pause instruction until delay expiration */
+            if(paused_until > clock_tick) {
+                callDebug("Call is paused until %d (now %ld).\n", paused_until, clock_tick);
+                setPaused();
+                callDebug("Running: %d (wake %d).\n", running, wake());
+                return true;
+            }
+            /* Our pause is over. */
+            callDebug("Pause complete, waking up.\n");
+            paused_until = 0;
         } else {
             CCallVariable* var = M_callVariableTable->getVar(paused_while_var_not_set);
             if (var == NULL || !var->isSet()) {
@@ -2773,12 +2789,20 @@ bool call::process_incoming(const char * msg, const struct sockaddr_storage *src
 
     setRunning();
 
+    message* cur_msg = call_scenario->messages[msg_index];
     /* Ignore the messages received during a pause if -pause_msg_ign is set */
     if(call_scenario->messages[msg_index] -> M_type == MSG_TYPE_PAUSE && pause_msg_ign) return(true);
 
     /* Get our destination if we have none. */
     if (call_peer.ss_family == AF_UNSPEC && src) {
         memcpy(&call_peer, src, sizeof(call_peer));
+    }
+
+    /* Authorize pause as the first command, even in server mode */
+    if((msg_index == 0) && (call_scenario->messages[msg_index] -> M_type == MSG_TYPE_PAUSE)) {
+        queue_up (msg);
+        paused_until = 0;
+        return run();
     }
 
     /* Authorize nop as a first command, even in server mode */

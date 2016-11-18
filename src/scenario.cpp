@@ -43,6 +43,7 @@ message::message(int index, const char *desc)
     this->desc = desc;
     pause_distribution = NULL; // delete on exit
     pause_variable = -1;
+    pause_while_var_not_set = -1;
     pause_desc = NULL; // free on exit
     sessions = 0;
     bShouldRecordRoutes = 0;
@@ -916,29 +917,33 @@ scenario::scenario(char * filename, int deflt)
                     curmsg->timewait = true;
                     found_timewait = true;
                 }
-
-                int var;
-                if ((var = xp_get_var("variable", "pause", -1)) != -1) {
-                    curmsg->pause_variable = var;
+                int var = xp_get_var("while_var_not_set", "pause", -1);
+                if (var != -1) {
+                    curmsg->pause_while_var_not_set = var;
                 } else {
-                    CSample *distribution = parse_distribution(true);
+                    var = xp_get_var("variable", "pause", -1);
+                    if (var != -1) {
+                        curmsg->pause_variable = var;
+                    } else {
+                        CSample *distribution = parse_distribution(true);
 
-                    bool sanity_check = xp_get_bool("sanity_check", "pause", true);
+                        bool sanity_check = xp_get_bool("sanity_check", "pause", true);
 
-                    double pause_duration = distribution->cdfInv(0.99);
-                    if (sanity_check && (pause_duration > INT_MAX)) {
-                        char percentile[100];
-                        char desc[100];
+                        double pause_duration = distribution->cdfInv(0.99);
+                        if (sanity_check && (pause_duration > INT_MAX)) {
+                            char percentile[100];
+                            char desc[100];
 
-                        distribution->timeDescr(desc, sizeof(desc));
-                        time_string(pause_duration, percentile, sizeof(percentile));
+                            distribution->timeDescr(desc, sizeof(desc));
+                            time_string(pause_duration, percentile, sizeof(percentile));
 
-                        ERROR("The distribution %s has a 99th percentile of %s, which is larger than INT_MAX.  You should chose different parameters.", desc, percentile);
+                            ERROR("The distribution %s has a 99th percentile of %s, which is larger than INT_MAX.  You should chose different parameters.", desc, percentile);
+                        }
+
+                        curmsg->pause_distribution = distribution;
+                        /* Update scenario duration with max duration */
+                        duration += (int)pause_duration;
                     }
-
-                    curmsg->pause_distribution = distribution;
-                    /* Update scenario duration with max duration */
-                    duration += (int)pause_duration;
                 }
             } else if(!strcmp(elem, "nop")) {
                 checkOptionalRecv(elem, scenario_file_cursor);

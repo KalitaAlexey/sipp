@@ -583,15 +583,18 @@ void print_stats_in_file(FILE * f)
                     curmsg->nb_timeout,
                     curmsg->nb_unexp);
         } else if (curmsg -> pause_distribution ||
-                   (curmsg -> pause_variable != -1)) {
+                   (curmsg -> pause_variable != -1) ||
+                   (curmsg -> pause_while_var_not_set != -1)) {
             char *desc = curmsg->pause_desc;
             if (!desc) {
                 desc = (char *)malloc(24);
                 if (curmsg->pause_distribution) {
                     desc[0] = '\0';
                     curmsg->pause_distribution->timeDescr(desc, 23);
-                } else {
+                } else if (curmsg->pause_variable != -1) {
                     snprintf(desc, 23, "$%s", display_scenario->allocVars->getName(curmsg->pause_variable));
+                } else {
+                    snprintf(desc, 23, "$%s", display_scenario->allocVars->getName(curmsg->pause_while_var_not_set));
                 }
                 desc[23] = '\0';
                 curmsg->pause_desc = desc;

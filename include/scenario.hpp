@@ -64,6 +64,7 @@ public:
     /* If this is a pause */
     CSample        *pause_distribution;
     int            pause_variable;
+    int            pause_while_var_not_set;
     /* This string is used for the display screen. */
     char           *pause_desc;
     /* Is this a final pause, intended for catching retransmissions? */
