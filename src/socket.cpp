@@ -967,6 +967,7 @@ void SIPpSocket::invalidate()
     if (SSL *ssl = ss_ssl) {
         SSL_set_shutdown(ssl, SSL_SENT_SHUTDOWN|SSL_RECEIVED_SHUTDOWN);
         SSL_free(ssl);
+        ss_ssl = NULL;
     }
 #endif
 
@@ -996,6 +997,7 @@ void SIPpSocket::invalidate()
 #endif
 
         abort();
+        return;
     }
 
     if ((pollidx = ss_pollidx) >= pollnfds) {
@@ -1419,7 +1421,7 @@ SIPpSocket* SIPpSocket::new_sipp_call_socket(bool use_ipv6, int transport, bool 
 }
 
 SIPpSocket* SIPpSocket::accept() {
-    SIPpSocket *ret;
+    SIPpSocket *new_socket;
     struct sockaddr_storage remote_sockaddr;
     int fd;
     sipp_socklen_t addrlen = sizeof(remote_sockaddr);
@@ -1445,29 +1447,29 @@ SIPpSocket* SIPpSocket::accept() {
     }
 #endif
 
-    ret = new SIPpSocket(ss_ipv6, ss_transport, fd, 1);
-    if (!ret) {
+    new_socket = new SIPpSocket(ss_ipv6, ss_transport, fd, 1);
+    if (!new_socket) {
         ::close(fd);
         ERROR_NO("Could not allocate new socket!");
     }
 
     /* We should connect back to the address which connected to us if we
      * experience a TCP failure. */
-    memcpy(&ret->ss_dest, &remote_sockaddr, sizeof(ret->ss_dest));
+    memcpy(&new_socket->ss_dest, &remote_sockaddr, sizeof(new_socket->ss_dest));
 
-    if (ret->ss_transport == T_TLS) {
+    if (new_socket->ss_transport == T_TLS) {
 #ifdef USE_OPENSSL
         int ret;
         int ii = 0;
-        while ((ret = SSL_accept(ss_ssl)) < 0) {
-            int err = SSL_get_error(ss_ssl, ret);
+        while ((ret = SSL_accept(new_socket->ss_ssl)) < 0) {
+            int err = SSL_get_error(new_socket->ss_ssl, ret);
             if ((err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) &&
                 ii < SIPP_SSL_MAX_RETRIES) {
                 /* These errors are benign we just need to wait for the socket
                  * to be readable/writable again. */
                 WARNING("SSL_accept failed with error: %s. Attempt %d. "
                         "Retrying...",
-                        sip_tls_error_string(ss_ssl, ret),
+                        sip_tls_error_string(new_socket->ss_ssl, ret),
                         ii + 1);
                 ii++;
                 sipp_usleep(SIPP_SSL_RETRY_TIMEOUT);
@@ -1475,7 +1477,7 @@ SIPpSocket* SIPpSocket::accept() {
             }
             else {
                 ERROR("Error in SSL_accept: %s\n",
-                      sip_tls_error_string(ss_ssl, ret));
+                      sip_tls_error_string(new_socket->ss_ssl, ret));
                 break;
             }
         }
@@ -1483,7 +1485,7 @@ SIPpSocket* SIPpSocket::accept() {
         ERROR("You need to compile SIPp with TLS support");
 #endif
     }
-    return ret;
+    return new_socket;
 }
 
 int sipp_bind_socket(SIPpSocket *socket, struct sockaddr_storage *saddr, int *port)

@@ -65,6 +65,8 @@ public:
     CSample        *pause_distribution;
     int            pause_variable;
     int            pause_while_var_not_set;
+    bool           enqueue_incoming_msgs;
+    bool           pause_ignore_incoming_msgs;
     /* This string is used for the display screen. */
     char           *pause_desc;
     /* Is this a final pause, intended for catching retransmissions? */

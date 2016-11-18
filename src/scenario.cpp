@@ -45,6 +45,7 @@ message::message(int index, const char *desc)
     pause_variable = -1;
     pause_while_var_not_set = -1;
     pause_desc = NULL; // free on exit
+    enqueue_incoming_msgs = false;
     sessions = 0;
     bShouldRecordRoutes = 0;
     bShouldAuthenticate = 0;
@@ -945,6 +946,8 @@ scenario::scenario(char * filename, int deflt)
                         duration += (int)pause_duration;
                     }
                 }
+                curmsg->enqueue_incoming_msgs = xp_get_bool("enqueue_incoming_msgs", "pause", false);
+                curmsg->pause_ignore_incoming_msgs = xp_get_bool("ignore_incoming_msgs", "pause", false);
             } else if(!strcmp(elem, "nop")) {
                 checkOptionalRecv(elem, scenario_file_cursor);
                 /* Does nothing at SIP level.  This message type can be used to handle

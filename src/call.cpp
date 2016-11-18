@@ -2750,15 +2750,8 @@ bool call::matches_scenario(unsigned int index, int reply_code, char * request, 
             } else {
                 return false;
             }
-        } else if (index == 0) {
-            /* Always true for the first message. */
-            return true;
-        } else if (curmsg->recv_response_for_cseq_method_list &&
-                   strstr(curmsg->recv_response_for_cseq_method_list, responsecseqmethod)) {
-            /* If we do not have a transaction defined, we just check the CSEQ method. */
-            return true;
         } else {
-            return false;
+            return true;
         }
     }
 
@@ -2790,8 +2783,23 @@ bool call::process_incoming(const char * msg, const struct sockaddr_storage *src
     setRunning();
 
     message* cur_msg = call_scenario->messages[msg_index];
-    /* Ignore the messages received during a pause if -pause_msg_ign is set */
-    if(call_scenario->messages[msg_index] -> M_type == MSG_TYPE_PAUSE && pause_msg_ign) return(true);
+
+    if (cur_msg->M_type == MSG_TYPE_PAUSE && cur_msg->enqueue_incoming_msgs) {
+        std::string msgString(msg);
+        sockaddr_storage addr;
+        memcpy(&addr, src, sizeof(addr));
+        enqueuedMsgs.push_back(EnqueuedMsg(msgString, addr));
+        return true;
+    }
+
+    /* Ignore the messages received during a pause
+     * if -pause_msg_ign is set or the current pause command has the attribute "ignore_incoming_msgs"
+     */
+    if (cur_msg->M_type == MSG_TYPE_PAUSE) {
+        if (pause_msg_ign || cur_msg->pause_ignore_incoming_msgs) {
+            return true;
+        }
+    }
 
     /* Get our destination if we have none. */
     if (call_peer.ss_family == AF_UNSPEC && src) {
@@ -3685,7 +3693,7 @@ call::T_ActionResult call::executeAction(const char * msg, message *curmsg)
             M_callVariableTable->getVar(currentAction->getVarId())->setString(str);
         } else if (currentAction->getActionType() == CAction::E_AT_LOG_TO_FILE) {
             char* x = createSendingMessage(currentAction->getMessage(), -2 /* do not add crlf*/);
-            LOG_MSG("%s\n", x);
+            LOG_MSG("%s: %s\n", id, x);
         } else if (currentAction->getActionType() == CAction::E_AT_LOG_WARNING) {
             char* x = createSendingMessage(currentAction->getMessage(), -2 /* do not add crlf*/);
             WARNING("%s", x);
