@@ -311,9 +311,9 @@ char * get_call_id(const char *msg)
     return call_id;
 }
 
-unsigned long int get_cseq_value(char *msg)
+unsigned long int get_cseq_value(const char *msg)
 {
-    char *ptr1;
+    const char *ptr1;
 
 
     // no short form for CSeq:
@@ -346,7 +346,7 @@ unsigned long int get_cseq_value(char *msg)
     return strtoul(ptr1, NULL, 10);
 }
 
-unsigned long get_reply_code(char *msg)
+unsigned long get_reply_code(const char *msg)
 {
     while (msg && *msg != ' ' && *msg != '\t')
         ++msg;

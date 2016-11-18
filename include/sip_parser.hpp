@@ -29,8 +29,8 @@ char *get_call_id(const char *msg);
 char *get_peer_tag(const char *msg);
 
 int get_method(char *msg);
-unsigned long int get_cseq_value(char *msg);
-unsigned long get_reply_code(char *msg);
+unsigned long int get_cseq_value(const char *msg);
+unsigned long get_reply_code(const char *msg);
 
 char *get_header_content(const char * message, const char * name);
 char *get_header(const char * message, const char * name, bool content);

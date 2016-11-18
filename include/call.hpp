@@ -74,7 +74,7 @@ public:
 
     virtual ~call();
 
-    virtual bool process_incoming(char * msg, struct sockaddr_storage *src = NULL);
+    virtual bool process_incoming(const char * msg, const struct sockaddr_storage *src = NULL);
     virtual bool  process_twinSippCom(char * msg);
 
     virtual bool run();
@@ -101,7 +101,7 @@ public:
     };
 
     void setLastMsg(const char *msg);
-    bool  automaticResponseMode(T_AutoMode P_case, char* P_recv);
+    bool  automaticResponseMode(T_AutoMode P_case, const char* P_recv);
     const char *getLastReceived() {
         return last_recv_msg;
     };
@@ -234,8 +234,8 @@ protected:
     bool matches_scenario(unsigned int index, int reply_code, char * request, char * responsecseqmethod, char *txn);
 
     bool executeMessage(message *curmsg);
-    T_ActionResult executeAction(char * msg, message *message);
-    void  extractSubMessage(char * msg, char * matchingString, char* result, bool case_indep,
+    T_ActionResult executeAction(const char * msg, message *message);
+    void  extractSubMessage(const char * msg, char * matchingString, char* result, bool case_indep,
                             int occurrence, bool headers);
     bool  rejectCall();
     double get_rhs(CAction *currentAction);
@@ -279,11 +279,11 @@ protected:
 
     /* rc == true means call not deleted by processing */
     bool next();
-    bool process_unexpected(char * msg);
+    bool process_unexpected(const char * msg);
     void do_bookkeeping(message *curmsg);
 
-    void  extract_cseq_method (char* responseCseq, char* msg);
-    void  extract_transaction (char* txn, char* msg);
+    void  extract_cseq_method (char* responseCseq, const char* msg);
+    void  extract_transaction (char* txn, const char* msg);
 
     int   send_raw(const char * msg, int index, int len);
     char * send_scene(int index, int *send_status, int *msgLen);
@@ -303,7 +303,7 @@ protected:
     void get_remote_media_addr(std::string const &msg);
 
 #ifdef RTP_STREAM
-    void extract_rtp_remote_addr(char* message);
+    void extract_rtp_remote_addr(const char* message);
 #endif
 
     bool lost(int index);
@@ -313,7 +313,7 @@ protected:
     void computeStat (CStat::E_Action P_action, unsigned long P_value, int which);
 
 
-    void queue_up(char *msg);
+    void queue_up(const char *msg);
     char *queued_msg;
 
 
