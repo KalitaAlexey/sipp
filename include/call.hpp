@@ -28,6 +28,7 @@
 #include <sys/socket.h>
 #include <string.h>
 #include "scenario.hpp"
+#include "shared_memory_piece.hpp"
 #include "stat.hpp"
 #ifdef USE_OPENSSL
 #include "sslcommon.h"
@@ -325,6 +326,25 @@ protected:
     int _callDebug(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
     char *debugBuffer;
     int debugLength;
+
+    class CommandCompletedVar
+    {
+    public:
+        int m_varId;
+        SharedMemoryPiece m_piece;
+        bool m_isVarSet;
+
+        CommandCompletedVar(int varId, const SharedMemoryPiece& piece)
+            : m_varId(varId)
+            , m_piece(piece)
+            , m_isVarSet(false)
+        {
+        }
+    };
+
+    std::vector<CommandCompletedVar *> commandCompletedVars;
+    typedef std::pair<std::string, sockaddr_storage> EnqueuedMsg;
+    std::vector<EnqueuedMsg> enqueuedMsgs;
 };
 
 

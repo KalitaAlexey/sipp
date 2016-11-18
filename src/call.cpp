@@ -610,6 +610,12 @@ call::~call()
     free(start_time_rtd);
     free(rtd_done);
     free(debugBuffer);
+
+    std::vector<CommandCompletedVar *>::iterator it = commandCompletedVars.begin();
+    for (; it != commandCompletedVars.end(); ++it) {
+        CommandCompletedVar* v = *it;
+        delete v;
+    }
 }
 
 void call::computeStat (CStat::E_Action P_action)
@@ -1442,6 +1448,37 @@ bool call::run()
         curmsg = call_scenario->messages[msg_index];
     }
 
+    if (!commandCompletedVars.empty()) {
+        std::vector<CommandCompletedVar*>::iterator it = commandCompletedVars.begin();
+
+        for (; it != commandCompletedVars.end(); ++it) {
+            CommandCompletedVar* var = *it;
+
+            if (var->m_isVarSet) {
+                continue;
+            }
+
+            SharedMemoryPiece& p = var->m_piece;
+
+            if (p.GetPtr() == NULL) {
+                p.OpenForReading();
+
+                // Is this shared memory piece is unreachable?
+                if (p.GetPtr() == NULL) {
+                    continue;
+                }
+            }
+
+            const int* const i = static_cast<int*>(p.GetPtr());
+            const bool isCompleted = *i == 1;
+
+            if (isCompleted && !var->m_isVarSet) {
+                M_callVariableTable->getVar(var->m_varId)->setBool(true);
+                var->m_isVarSet = true;
+            }
+        }
+    }
+
     callDebug("Processing message %d of type %d for call %s at %lu.\n", msg_index, curmsg->M_type, id, clock_tick);
 
     if (curmsg->condexec != -1) {
@@ -1529,7 +1566,28 @@ bool call::run()
         /* Our pause is over. */
         callDebug("Pause complete, waking up.\n");
         paused_until = 0;
-        return next();
+        } else {
+            CCallVariable* var = M_callVariableTable->getVar(paused_while_var_not_set);
+            if (var == NULL || !var->isSet()) {
+                callDebug("Call is paused while variable is not set %d.\n", paused_while_var_not_set);
+                setPaused();
+                return true;
+            } else {
+                callDebug("Pause complete, waking up.\n");
+                paused_while_var_not_set = -1;
+            }
+        }
+        bool hasNext = next();
+        if (!enqueuedMsgs.empty()) {
+            callDebug("Has enqueued messages. Starting processing\n");
+            std::vector<EnqueuedMsg>::const_iterator it = enqueuedMsgs.cbegin();
+            for (; it != enqueuedMsgs.cend(); ++it) {
+                const EnqueuedMsg& msg = *it;
+                process_incoming(msg.first.c_str(), &msg.second);
+            }
+            enqueuedMsgs.clear();
+        }
+        return hasNext;
     }
     return executeMessage(curmsg);
 }
@@ -3611,6 +3669,24 @@ call::T_ActionResult call::executeAction(const char * msg, message *curmsg)
             char* x = createSendingMessage(currentAction->getMessage(), -2 /* do not add crlf*/);
             ERROR("%s", x);
         } else if (currentAction->getActionType() == CAction::E_AT_EXECUTE_CMD) {
+            CommandCompletedVar* commandCompletedVar = NULL;
+            int randomNumber = rand();
+            int varId = currentAction->getVarId();
+            char buffer[512];
+            sprintf(buffer, "sipp_%s_%d_%d_%d", id, randomNumber, msg_index, varId);
+            SharedMemoryPiece piece(buffer, 1);
+            piece.OpenForWriting();
+            {
+                int* i = static_cast<int*>(piece.GetPtr());
+                if (i != NULL) {
+                    *i = 0;
+                }
+            }
+            if (varId != -1) {
+                commandCompletedVar = new CommandCompletedVar(varId, piece);
+                commandCompletedVars.push_back(commandCompletedVar);
+                piece.SetShouldCloseOnDestruction(false);
+            }
             char* x = createSendingMessage(currentAction->getMessage(), -2 /* do not add crlf*/);
             // TRACE_MSG("Trying to execute [%s]", x);
             pid_t l_pid;
@@ -3630,12 +3706,21 @@ call::T_ActionResult call::executeAction(const char * msg, message *curmsg)
                         ret = system(x); // second child runs
                         if(ret == -1) {
                             WARNING("system call error for %s", x);
+                        } else {
+                            if (varId != -1) {
+                                piece.OpenForWriting();
+                                void* ptr = piece.GetPtr();
+                                if (ptr != NULL) {
+                                    int* intPtr = static_cast<int*>(ptr);
+                                    *intPtr = 1;
+                                }
+                            }
                         }
                     }
                     exit(EXIT_OTHER);
                 }
                 break;
-            default:
+            default: {
                 // parent process continue
                 // reap first child immediately
                 pid_t ret;
@@ -3645,6 +3730,7 @@ call::T_ActionResult call::executeAction(const char * msg, message *curmsg)
                     }
                 }
                 break;
+            }
             }
         } else if (currentAction->getActionType() == CAction::E_AT_EXEC_INTCMD) {
             switch (currentAction->getIntCmd()) {

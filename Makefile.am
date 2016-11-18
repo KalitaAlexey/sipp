@@ -77,6 +77,7 @@ common_incl = \
 	include/scenario.hpp \
 	include/sip_parser.hpp \
 	include/screen.hpp \
+    include/shared_memory_piece.hpp \
 	include/socket.hpp \
 	include/socketowner.hpp \
 	include/stat.hpp \
@@ -108,6 +109,7 @@ common_SOURCES = \
 	src/reporttask.cpp \
 	src/rijndael.c \
 	src/scenario.cpp \
+    src/shared_memory_piece.cpp \
 	src/sip_parser.cpp \
 	src/screen.cpp \
 	src/socket.cpp \

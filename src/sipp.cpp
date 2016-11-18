@@ -1803,6 +1803,8 @@ int main(int argc, char *argv[])
     if (!isatty(fileno(stdout)))
         use_curses = false;
 
+    srand(time(NULL));
+
     if (use_curses)
         screen_init();
 

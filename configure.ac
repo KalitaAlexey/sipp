@@ -101,6 +101,9 @@ AC_SEARCH_LIBS([dlopen], [dl])
 AC_SEARCH_LIBS([dlerror], [dl])
 AC_SEARCH_LIBS([dlsym], [dl])
 
+# For shared memory we need -rt
+AC_SEARCH_LIBS([shm_open], [rt])
+
 # For glibc pre-2.17 we need -rt
 AC_SEARCH_LIBS([clock_gettime], [rt])
 
